@@ -9802,19 +9802,14 @@ function testVendorLogin() {
 // Blob URL SW registration fails on iOS Safari (SecurityError) — skip silently
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    const isSecure = location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1';
-    if (!isSecure) {
-      // Not HTTPS — SW won't work, skip silently (no error)
-      console.log('ℹ️ SW skipped: requires HTTPS');
-      return;
+    // Unregister all old service workers to force fresh load
+    navigator.serviceWorker.getRegistrations().then(regs => {
+      regs.forEach(reg => reg.unregister());
+    });
+    // Clear all caches
+    if ('caches' in window) {
+      caches.keys().then(keys => keys.forEach(key => caches.delete(key)));
     }
-    // Try to register sw.js if it exists (for hosted deployments)
-    navigator.serviceWorker.register('/sw.js', { scope: '/' })
-      .then(() => console.log('✅ SW registered'))
-      .catch(() => {
-        // sw.js not found (local file) — that's fine, skip silently
-        console.log('ℹ️ SW not available (local mode)');
-      });
   });
 }
 

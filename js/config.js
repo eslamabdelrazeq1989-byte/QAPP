@@ -147,6 +147,7 @@ const QDB = {
           try { if (key==='news'        && typeof renderAllNews==='function')        renderAllNews(val); }        catch(e) {}
           try { if (key==='medicals'    && typeof renderAllMedicals==='function')    renderAllMedicals(val); }    catch(e) {}
           try { if (key==='shops'       && typeof renderAllShops==='function')       renderAllShops(val); }       catch(e) {}
+          try { if (key==='crafts'      && typeof renderAllCrafts==='function')      renderAllCrafts(val); }      catch(e) {}
           if (this._listeners[key]) {
             this._listeners[key].forEach(fn => { try { fn(val); } catch(e) {} });
           }
@@ -158,7 +159,14 @@ const QDB = {
 
 // ── تشغيل عند فتح الصفحة ──
 document.addEventListener('DOMContentLoaded', () => {
-  QDB.loadAll().then(() => QDB.startRealtime()).catch(e => {
+  QDB.loadAll().then(() => {
+    // طبّق البيانات المحفوظة على البطاقات فوراً بعد التحميل
+    try{ const r=QDB.get('restaurants'); if(r && typeof renderAllRestaurants==='function') renderAllRestaurants(r); }catch(e){}
+    try{ const m=QDB.get('medicals');    if(m && typeof renderAllMedicals==='function')    renderAllMedicals(m);    }catch(e){}
+    try{ const s=QDB.get('shops');       if(s && typeof renderAllShops==='function')       renderAllShops(s);       }catch(e){}
+    try{ const c=QDB.get('crafts');      if(c && typeof renderAllCrafts==='function')      renderAllCrafts(c);      }catch(e){}
+    QDB.startRealtime();
+  }).catch(e => {
     console.warn('QDB init failed, using localStorage only:', e);
     QDB.startRealtime();
   });

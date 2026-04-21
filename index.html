@@ -630,10 +630,13 @@ body{background:#fff8f5;color:#1a1a1a;direction:rtl;display:flex;flex-direction:
 
 <!-- ══ Firebase SDK (اشرح الـ version الصح من Firebase Console) ══ -->
 <!-- TODO: فعّل السطور دي بعد إنشاء مشروع Firebase -->
-<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
-<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
-<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-storage.js"></script>
+<!--
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
+-->
+
 <!-- ══ App Config (Firebase config + QDB) — يجب أن يكون أول شيء ══ -->
 <script>
 // ══════════════════════════════════════════════
@@ -4389,6 +4392,7 @@ function shareNews(){
 }
 
 function openRestDetail(card){
+  if(card.getAttribute('data-coming-soon')==='true'){showToast('🔜 قريباً — ترقب الإضافة!');return;}
   try{
     const nmEl=card.querySelector('.cnm');if(!nmEl)return;
     const nm=nmEl.textContent;
@@ -4614,6 +4618,7 @@ function confirmAppointment(){
 }
 
 function openCraftDetail(card){
+  if(card.getAttribute('data-coming-soon')==='true'){showToast('🔜 قريباً — ترقب الإضافة!');return;}
   try{
     const nmEl=card.querySelector('.cnm');
     if(!nmEl)return;
@@ -8166,6 +8171,7 @@ window.shopHeroOverrides={};
 window.shopItems={};
 
 function openShopDetail(card){
+  if(card.getAttribute('data-coming-soon')==='true'){showToast('🔜 قريباً — ترقب الإضافة!');return;}
   try{
     const nm=card.querySelector('.cnm')?.textContent||'';
     const sub=card.querySelector('.csub')?.textContent||'';
@@ -9801,14 +9807,19 @@ function testVendorLogin() {
 // Blob URL SW registration fails on iOS Safari (SecurityError) — skip silently
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    // Unregister all old service workers to force fresh load
-    navigator.serviceWorker.getRegistrations().then(regs => {
-      regs.forEach(reg => reg.unregister());
-    });
-    // Clear all caches
-    if ('caches' in window) {
-      caches.keys().then(keys => keys.forEach(key => caches.delete(key)));
+    const isSecure = location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+    if (!isSecure) {
+      // Not HTTPS — SW won't work, skip silently (no error)
+      console.log('ℹ️ SW skipped: requires HTTPS');
+      return;
     }
+    // Try to register sw.js if it exists (for hosted deployments)
+    navigator.serviceWorker.register('/sw.js', { scope: '/' })
+      .then(() => console.log('✅ SW registered'))
+      .catch(() => {
+        // sw.js not found (local file) — that's fine, skip silently
+        console.log('ℹ️ SW not available (local mode)');
+      });
   });
 }
 
@@ -9899,22 +9910,84 @@ function persistAllRestaurantsToQDB(){
 
 function renderAllRestaurants(data){
   if(!data) return;
+  // حذف البطاقات المحذوفة من Firestore نهائياً
+  document.querySelectorAll('#foodList .card[data-rest-id]').forEach(card=>{
+    if(!data[card.dataset.restId]) card.remove();
+  });
+  // تطبيق التعديلات + قريباً
   Object.entries(data).forEach(([id, d])=>{
     const card = document.querySelector('[data-rest-id="'+id+'"]');
     if(!card) return;
-    const nm = card.querySelector('.cnm');
-    const sub = card.querySelector('.csub');
-    const st = card.querySelector('.rst-status');
-    if(nm && d.name) nm.textContent = d.name;
-    if(sub && d.type) sub.textContent = d.type;
-    if(d.discount) card.dataset.discount = d.discount;
-    if(d.phone) { card.dataset.phone=d.phone; if(nm) nm.dataset.phone=d.phone; }
-    if(d.addr) card.dataset.addr = d.addr;
-    if(d.hours) card.dataset.hours = d.hours;
+    const nm=card.querySelector('.cnm'), sub=card.querySelector('.csub'), st=card.querySelector('.rst-status');
+    if(nm && d.name) nm.textContent=d.name;
+    if(sub && d.type) sub.textContent=d.type;
+    if(d.discount!==undefined) card.dataset.discount=d.discount||'';
+    if(d.phone){card.dataset.phone=d.phone; if(nm) nm.dataset.phone=d.phone;}
+    if(d.addr) card.dataset.addr=d.addr;
+    if(d.hours) card.dataset.hours=d.hours;
+    if(d.fb!==undefined) card.dataset.fb=d.fb||'';
     if(st && d.status){
-      st.textContent = d.status;
-      st.className = 'rst-status rst-'+(d.status==='مفتوح'?'open':d.status==='مشغول'?'busy':'closed');
+      st.textContent=d.status;
+      st.className='rst-status rst-'+(d.status==='مفتوح'?'open':d.status==='مشغول'?'busy':'closed');
     }
+    if(d.comingSoon){
+      card.setAttribute('data-coming-soon','true');
+      if(!card.querySelector('.cs-badge')){
+        card.style.position='relative';
+        const b=document.createElement('div');
+        b.className='cs-badge';
+        b.style.cssText='position:absolute;top:8px;left:8px;background:linear-gradient(135deg,#6a1b9a,#4a148c);color:#fff;font-size:10px;font-weight:800;padding:3px 8px;border-radius:20px;z-index:2;pointer-events:none';
+        b.textContent='🔜 قريباً'; card.appendChild(b);
+      }
+    } else {
+      card.removeAttribute('data-coming-soon');
+      card.querySelector('.cs-badge')?.remove();
+    }
+  });
+}
+
+function renderAllMedicals(data){
+  if(!data) return;
+  document.querySelectorAll('#medList .card').forEach(card=>{
+    if(card.id && !data[card.id]) card.remove();
+  });
+  Object.entries(data).forEach(([id,d])=>{
+    const card=document.getElementById(id); if(!card) return;
+    const nm=card.querySelector('.cnm'), sub=card.querySelector('.csub');
+    if(nm && d.name) nm.textContent=d.name;
+    if(sub && d.sub) sub.textContent=d.sub;
+    if(d.phone) card.dataset.phone=d.phone;
+    d.comingSoon ? card.setAttribute('data-coming-soon','true') : card.removeAttribute('data-coming-soon');
+  });
+}
+
+function renderAllShops(data){
+  if(!data) return;
+  document.querySelectorAll('#shopList .card').forEach(card=>{
+    if(card.id && !data[card.id]) card.remove();
+  });
+  Object.entries(data).forEach(([id,d])=>{
+    const card=document.getElementById(id); if(!card) return;
+    const nm=card.querySelector('.cnm'), sub=card.querySelector('.csub');
+    if(nm && d.name) nm.textContent=d.name;
+    if(sub && d.sub) sub.textContent=d.sub;
+    if(d.phone) card.dataset.phone=d.phone;
+    d.comingSoon ? card.setAttribute('data-coming-soon','true') : card.removeAttribute('data-coming-soon');
+  });
+}
+
+function renderAllCrafts(data){
+  if(!data) return;
+  document.querySelectorAll('#craftList .card').forEach(card=>{
+    if(card.id && !data[card.id]) card.remove();
+  });
+  Object.entries(data).forEach(([id,d])=>{
+    const card=document.getElementById(id); if(!card) return;
+    const nm=card.querySelector('.cnm'), sub=card.querySelector('.csub');
+    if(nm && d.name) nm.textContent=d.name;
+    if(sub && d.sub) sub.textContent=d.sub;
+    if(d.phone) card.dataset.phone=d.phone;
+    d.comingSoon ? card.setAttribute('data-coming-soon','true') : card.removeAttribute('data-coming-soon');
   });
 }
 
@@ -9952,12 +10025,7 @@ function setAdminPassword(newPass){
   showToast('✅ تم تغيير كلمة مرور المدير');
 }
 
-// Auto-persist on load after 2s
-setTimeout(()=>{
-  try{ persistAllRestaurantsToQDB(); }catch(e){}
-  try{ persistMedicalsToQDB(); }catch(e){}
-  try{ persistShopsToQDB(); }catch(e){}
-},2000);
+// Auto-persist DISABLED — admin changes saved directly to Firestore
 
 
 /* ══ BOOKING SYSTEM CONTROL ══ */

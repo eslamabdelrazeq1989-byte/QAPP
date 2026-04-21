@@ -5757,6 +5757,7 @@ function addRestaurant(){
   if(document.getElementById('aR-close'))document.getElementById('aR-close').value='23:00';
   if(prev)prev.style.display='none';
   showToast('✅ تم إضافة المطعم');askPushNotif('المطاعم',name);setTimeout(refreshCouponRestList,400);closeAdmin();goTo('food');
+  setTimeout(()=>persistAllRestaurantsToQDB(),400);
 }
 /* ══ MEDICAL EDIT FUNCTIONS ══ */
 let currentEditMedId=null, currentEditCraftId=null, currentEditTransId=null, currentEditMktId=null;
@@ -5800,6 +5801,7 @@ function saveMedEdit(){
   document.getElementById('medListView').style.display='block';
   document.getElementById('medEditView').style.display='none';
   showToast('✅ تم حفظ بيانات '+name);
+  setTimeout(()=>persistMedicalsToQDB(),300);
 }
 function deleteMedFromEdit(){
   const uid=document.getElementById('eM-uid').value;
@@ -5811,6 +5813,7 @@ function deleteMedFromEdit(){
   document.getElementById('medListView').style.display='block';
   document.getElementById('medEditView').style.display='none';
   showToast('🗑️ تم الحذف');
+  setTimeout(()=>persistMedicalsToQDB(),300);
 }
 function refreshMedAdminList(){
   const list=document.getElementById('admMedList');if(!list)return;
@@ -5888,6 +5891,7 @@ function saveCraftEdit(){
   document.getElementById('craftListView').style.display='block';
   document.getElementById('craftEditView').style.display='none';
   showToast('✅ تم حفظ بيانات '+name);
+  setTimeout(()=>persistCraftsToQDB(),300);
 }
 function deleteCraftFromEdit(){
   const uid=document.getElementById('eC-uid').value;
@@ -5897,6 +5901,7 @@ function deleteCraftFromEdit(){
   document.getElementById('craftListView').style.display='block';
   document.getElementById('craftEditView').style.display='none';
   showToast('🗑️ تم الحذف');
+  setTimeout(()=>persistCraftsToQDB(),300);
 }
 
 /* ══ TRANSPORT EDIT FUNCTIONS ══ */
@@ -6207,6 +6212,7 @@ function addMedical(){
   ['aM-name','aM-phone','aM-hours','aM-addr','aM-price'].forEach(id=>{const el=document.getElementById(id);if(el)el.value=''});
   if(prevEl){prevEl.src='';prevEl.style.display='none';}
   showToast('✅ تم إضافة للدليل الطبي');closeAdmin();goTo('medical');
+  setTimeout(()=>persistMedicalsToQDB(),400);
 }
 function editMedItem(id){
   const card=document.getElementById(id);if(!card)return;
@@ -6235,6 +6241,7 @@ function addCraftsman(){
   ['aC-name','aC-phone'].forEach(id=>document.getElementById(id).value='');
   if(document.getElementById('aC-spec-custom'))document.getElementById('aC-spec-custom').value='';
   showToast('✅ تم إضافة الأسطى');closeAdmin();goTo('craftsmen');
+  setTimeout(()=>persistCraftsToQDB(),400);
 }
 function addCraftCat(){
   const val=document.getElementById('aCat-new')?document.getElementById('aCat-new').value.trim():'';
@@ -8251,6 +8258,7 @@ function addShop(){
   document.getElementById('shopListView').style.display='block';
   document.getElementById('shopAddView').style.display='none';
   showToast('✅ تم إضافة المحل');closeAdmin();goTo('shops');
+  setTimeout(()=>persistShopsToQDB(),400);
 }
 
 function refreshShopAdminList(){
@@ -8325,6 +8333,7 @@ function saveShopInfo(){
   document.getElementById('shopEditorTitle').textContent='تعديل: '+nm;
   refreshShopAdminList();
   showToast('✅ تم حفظ بيانات '+nm);
+  setTimeout(()=>persistShopsToQDB(),300);
 }
 
 function setShopHeroFromEditor(input){
@@ -8364,6 +8373,7 @@ function deleteShopFromEditor(){
   if(!confirm('⚠️ حذف هذا المحل نهائياً؟'))return;
   const card=document.getElementById(currentEditShopId);if(card)card.remove();
   closeShopEditor();refreshShopAdminList();showToast('🗑️ تم حذف المحل');
+  setTimeout(()=>persistShopsToQDB(),300);
 }
 
 function addShopItem(){
@@ -9892,7 +9902,6 @@ function changeAdminPassFromSettings(){
 ══════════════════════════════════════════════════════════ */
 
 function persistAllRestaurantsToQDB(){
-  // Collect all restaurant card data
   const cards = document.querySelectorAll('#foodList .card[data-rest-id]');
   const data = {};
   cards.forEach(card=>{
@@ -9906,7 +9915,8 @@ function persistAllRestaurantsToQDB(){
       hours: card.dataset.hours||'', fb: card.dataset.fb||'',
       discount: card.dataset.discount||'',
       status: card.querySelector('.rst-status')?.textContent||'مفتوح',
-      cat: card.dataset.cat||''
+      cat: card.dataset.cat||'',
+      comingSoon: card.getAttribute('data-coming-soon')==='true'
     };
   });
   QDB.set('restaurants', data);
@@ -9914,84 +9924,96 @@ function persistAllRestaurantsToQDB(){
 
 function renderAllRestaurants(data){
   if(!data) return;
-  // حذف البطاقات المحذوفة من Firestore نهائياً
   document.querySelectorAll('#foodList .card[data-rest-id]').forEach(card=>{
     if(!data[card.dataset.restId]) card.remove();
   });
-  // تطبيق التعديلات + قريباً
-  Object.entries(data).forEach(([id, d])=>{
-    const card = document.querySelector('[data-rest-id="'+id+'"]');
-    if(!card) return;
-    const nm=card.querySelector('.cnm'), sub=card.querySelector('.csub'), st=card.querySelector('.rst-status');
-    if(nm && d.name) nm.textContent=d.name;
-    if(sub && d.type) sub.textContent=d.type;
-    if(d.discount!==undefined) card.dataset.discount=d.discount||'';
-    if(d.phone){card.dataset.phone=d.phone; if(nm) nm.dataset.phone=d.phone;}
+  const list=document.getElementById('foodList');
+  Object.entries(data).forEach(([id,d])=>{
+    let card=document.querySelector('[data-rest-id="'+id+'"]');
+    if(!card){
+      card=document.createElement('div'); card.className='card';
+      card.dataset.restId=id; card.dataset.cat=d.cat||'';
+      card.setAttribute('onclick','openRestDetail(this)');
+      const ph=d.phone||''; const wa=d.wa||ph;
+      card.innerHTML='<div class="crow"><div class="cthumb"><svg width="28" height="28" viewBox="0 0 28 28" fill="none"><circle cx="14" cy="14" r="11" fill="#1a3d22" stroke="#43a047" stroke-width="1"/></svg></div><div class="cinfo"><div class="cnm">'+d.name+'</div><div class="csub">'+( d.type||'متنوع')+'</div><div class="cmeta"><span class="stars-d">★★★★</span><span class="rst-status rst-open">'+( d.status||'مفتوح')+'</span></div></div></div><div class="abtns"><a class="bc" href="tel:'+ph+'">📞 اتصل</a><a class="bw" href="https://wa.me/2'+wa.replace(/^0/,'')+'?text=طلب من '+(d.name||'')+'" target="_blank">📩 طلب</a></div>';
+      list.appendChild(card);
+    }
+    const nm=card.querySelector('.cnm'),sub=card.querySelector('.csub'),st=card.querySelector('.rst-status');
+    if(nm&&d.name) nm.textContent=d.name;
+    if(sub&&d.type) sub.textContent=d.type;
+    if(d.phone){card.dataset.phone=d.phone;if(nm)nm.dataset.phone=d.phone;}
+    if(d.wa) card.dataset.wa=d.wa;
     if(d.addr) card.dataset.addr=d.addr;
     if(d.hours) card.dataset.hours=d.hours;
     if(d.fb!==undefined) card.dataset.fb=d.fb||'';
-    if(st && d.status){
-      st.textContent=d.status;
-      st.className='rst-status rst-'+(d.status==='مفتوح'?'open':d.status==='مشغول'?'busy':'closed');
-    }
-    if(d.comingSoon){
-      card.setAttribute('data-coming-soon','true');
-      if(!card.querySelector('.cs-badge')){
-        card.style.position='relative';
-        const b=document.createElement('div');
-        b.className='cs-badge';
-        b.style.cssText='position:absolute;top:8px;left:8px;background:linear-gradient(135deg,#6a1b9a,#4a148c);color:#fff;font-size:10px;font-weight:800;padding:3px 8px;border-radius:20px;z-index:2;pointer-events:none';
-        b.textContent='🔜 قريباً'; card.appendChild(b);
-      }
-    } else {
-      card.removeAttribute('data-coming-soon');
-      card.querySelector('.cs-badge')?.remove();
-    }
+    if(d.discount!==undefined) card.dataset.discount=d.discount||'';
+    if(st&&d.status){st.textContent=d.status;st.className='rst-status rst-'+(d.status==='مفتوح'?'open':d.status==='مشغول'?'busy':'closed');}
+    if(d.comingSoon){card.setAttribute('data-coming-soon','true');if(!card.querySelector('.cs-badge')){card.style.position='relative';const b=document.createElement('div');b.className='cs-badge';b.style.cssText='position:absolute;top:8px;left:8px;background:linear-gradient(135deg,#6a1b9a,#4a148c);color:#fff;font-size:10px;font-weight:800;padding:3px 8px;border-radius:20px;z-index:2;pointer-events:none';b.textContent='🔜 قريباً';card.appendChild(b);}}
+    else{card.removeAttribute('data-coming-soon');card.querySelector('.cs-badge')?.remove();}
   });
 }
 
 function renderAllMedicals(data){
   if(!data) return;
-  document.querySelectorAll('#medList .card').forEach(card=>{
-    if(card.id && !data[card.id]) card.remove();
-  });
+  document.querySelectorAll('#medList .card').forEach(card=>{if(card.id&&!data[card.id])card.remove();});
+  const list=document.getElementById('medList');
   Object.entries(data).forEach(([id,d])=>{
-    const card=document.getElementById(id); if(!card) return;
-    const nm=card.querySelector('.cnm'), sub=card.querySelector('.csub');
-    if(nm && d.name) nm.textContent=d.name;
-    if(sub && d.sub) sub.textContent=d.sub;
-    if(d.phone) card.dataset.phone=d.phone;
-    d.comingSoon ? card.setAttribute('data-coming-soon','true') : card.removeAttribute('data-coming-soon');
+    let card=document.getElementById(id);
+    if(!card){
+      card=document.createElement('div'); card.className='card'; card.id=id; card.dataset.cat=d.cat||'عيادة';
+      const dd={name:d.name||'',sub:d.sub||'',phone:d.phone||'',addr:d.addr||'',hours:d.hours||''};
+      card.setAttribute('onclick','openMedDetail('+JSON.stringify(dd)+')');
+      card.innerHTML='<div class="crow"><div class="cthumb" style="background:#0d1a35"><svg width="26" height="26" viewBox="0 0 26 26" fill="none"><circle cx="13" cy="10" r="5" fill="#0d1a35" stroke="#1565c0" stroke-width="1.5"/></svg></div><div class="cinfo"><div class="cnm">'+d.name+'</div><div class="csub">'+( d.sub||'')+'</div><div class="cmeta"><span class="tag tb">'+( d.cat||'عيادة')+'</span></div></div></div>';
+      list.appendChild(card);
+    }
+    const nm=card.querySelector('.cnm'),sub=card.querySelector('.csub');
+    if(nm&&d.name)nm.textContent=d.name; if(sub&&d.sub)sub.textContent=d.sub;
+    if(d.phone)card.dataset.phone=d.phone;
+    const dd={name:d.name||'',sub:d.sub||'',phone:d.phone||'',addr:d.addr||'',hours:d.hours||''};
+    card.setAttribute('onclick','openMedDetail('+JSON.stringify(dd)+')');
+    d.comingSoon?card.setAttribute('data-coming-soon','true'):card.removeAttribute('data-coming-soon');
   });
 }
 
 function renderAllShops(data){
   if(!data) return;
-  document.querySelectorAll('#shopList .card').forEach(card=>{
-    if(card.id && !data[card.id]) card.remove();
-  });
+  document.querySelectorAll('#shopList .card').forEach(card=>{if(card.id&&!data[card.id])card.remove();});
+  const list=document.getElementById('shopList');
   Object.entries(data).forEach(([id,d])=>{
-    const card=document.getElementById(id); if(!card) return;
-    const nm=card.querySelector('.cnm'), sub=card.querySelector('.csub');
-    if(nm && d.name) nm.textContent=d.name;
-    if(sub && d.sub) sub.textContent=d.sub;
-    if(d.phone) card.dataset.phone=d.phone;
-    d.comingSoon ? card.setAttribute('data-coming-soon','true') : card.removeAttribute('data-coming-soon');
+    let card=document.getElementById(id);
+    if(!card){
+      card=document.createElement('div'); card.className='card'; card.id=id; card.dataset.cat=d.cat||'';
+      card.dataset.phone=d.phone||''; card.dataset.wa=d.wa||''; card.dataset.addr=d.addr||'';
+      card.setAttribute('onclick','openShopDetail(this)');
+      card.innerHTML='<div class="crow"><div class="cthumb" style="background:#f5f5f5"><svg width="26" height="26" viewBox="0 0 26 26" fill="none"><path d="M4 8l1-3h18l1 3" fill="none" stroke="#5a3020" stroke-width="1.5"/><rect x="3" y="8" width="20" height="14" rx="3" fill="#5a3020" opacity=".7"/></svg></div><div class="cinfo"><div class="cnm">'+d.name+'</div><div class="csub">'+( d.sub||d.cat||'')+'</div><div class="cmeta"><span class="avon">مفتوح</span></div></div></div>';
+      list.appendChild(card);
+    }
+    const nm=card.querySelector('.cnm'),sub=card.querySelector('.csub');
+    if(nm&&d.name)nm.textContent=d.name; if(sub&&d.sub)sub.textContent=d.sub;
+    if(d.phone)card.dataset.phone=d.phone; if(d.wa)card.dataset.wa=d.wa;
+    if(d.addr)card.dataset.addr=d.addr; if(d.hours)card.dataset.hours=d.hours;
+    d.comingSoon?card.setAttribute('data-coming-soon','true'):card.removeAttribute('data-coming-soon');
   });
 }
 
 function renderAllCrafts(data){
   if(!data) return;
-  document.querySelectorAll('#craftList .card').forEach(card=>{
-    if(card.id && !data[card.id]) card.remove();
-  });
+  document.querySelectorAll('#craftList .card').forEach(card=>{if(card.id&&!data[card.id])card.remove();});
+  const list=document.getElementById('craftList');
   Object.entries(data).forEach(([id,d])=>{
-    const card=document.getElementById(id); if(!card) return;
-    const nm=card.querySelector('.cnm'), sub=card.querySelector('.csub');
-    if(nm && d.name) nm.textContent=d.name;
-    if(sub && d.sub) sub.textContent=d.sub;
-    if(d.phone) card.dataset.phone=d.phone;
-    d.comingSoon ? card.setAttribute('data-coming-soon','true') : card.removeAttribute('data-coming-soon');
+    let card=document.getElementById(id)||document.querySelector('[data-craft-id="'+id+'"]');
+    if(!card){
+      card=document.createElement('div'); card.className='card'; card.id=id;
+      card.dataset.cat=d.cat||''; card.dataset.craftId=id; card.dataset.phone=d.phone||'';
+      card.setAttribute('onclick','openCraftDetail(this)');
+      card.innerHTML='<div class="crow"><div class="cthumb" style="background:#fffde6"><svg width="26" height="26" viewBox="0 0 26 26" fill="none"><circle cx="13" cy="10" r="5" fill="#1a1800" stroke="#fdd835" stroke-width="1"/></svg></div><div class="cinfo"><div class="cnm" data-phone="'+( d.phone||'')+'">'+d.name+'</div><div class="csub">'+( d.sub||d.cat||'')+'</div><div class="cmeta"><span class="avon">متاح الآن</span></div></div></div>';
+      list.appendChild(card);
+    }
+    const nm=card.querySelector('.cnm'),sub=card.querySelector('.csub');
+    if(nm&&d.name){nm.textContent=d.name;if(d.phone)nm.dataset.phone=d.phone;}
+    if(sub&&d.sub)sub.textContent=d.sub;
+    if(d.phone)card.dataset.phone=d.phone;
+    d.comingSoon?card.setAttribute('data-coming-soon','true'):card.removeAttribute('data-coming-soon');
   });
 }
 
@@ -10000,13 +10022,37 @@ function persistMedicalsToQDB(){
   const data = {};
   cards.forEach((card,i)=>{
     const id = card.id || 'med_'+i;
+    if(!card.id) card.id = id;
+    const onclick = card.getAttribute('onclick')||'';
+    let phone='', addr='', hours='';
+    try{ const m=onclick.match(/openMedDetail\((.+)\)/); if(m){const d=JSON.parse(m[1]);phone=d.phone||'';addr=d.addr||'';hours=d.hours||'';} }catch(e){}
     data[id] = {
       id, name: card.querySelector('.cnm')?.textContent||'',
       sub: card.querySelector('.csub')?.textContent||'',
-      cat: card.dataset.cat||''
+      cat: card.dataset.cat||'',
+      phone: phone||card.dataset.phone||'',
+      addr: addr, hours: hours,
+      comingSoon: card.getAttribute('data-coming-soon')==='true'
     };
   });
   QDB.set('medicals', data);
+}
+
+function persistCraftsToQDB(){
+  const cards = document.querySelectorAll('#craftList .card');
+  const data = {};
+  cards.forEach((card,i)=>{
+    const id = card.id || card.dataset.craftId || 'craft_'+i;
+    if(!card.id) card.id = id;
+    data[id] = {
+      id, name: card.querySelector('.cnm')?.textContent||'',
+      sub: card.querySelector('.csub')?.textContent||'',
+      cat: card.dataset.cat||'',
+      phone: card.dataset.phone||card.querySelector('.cnm')?.dataset.phone||'',
+      comingSoon: card.getAttribute('data-coming-soon')==='true'
+    };
+  });
+  QDB.set('crafts', data);
 }
 
 function persistShopsToQDB(){
@@ -10014,7 +10060,15 @@ function persistShopsToQDB(){
   const data = {};
   cards.forEach((card,i)=>{
     const id = card.id||'shop_'+i;
-    data[id]={id,name:card.querySelector('.cnm')?.textContent||'',sub:card.querySelector('.csub')?.textContent||'',cat:card.dataset.cat||''};
+    if(!card.id) card.id = id;
+    data[id]={
+      id, name:card.querySelector('.cnm')?.textContent||'',
+      sub:card.querySelector('.csub')?.textContent||'',
+      cat:card.dataset.cat||'',
+      phone:card.dataset.phone||'', wa:card.dataset.wa||'',
+      addr:card.dataset.addr||'', hours:card.dataset.hours||'',
+      comingSoon: card.getAttribute('data-coming-soon')==='true'
+    };
   });
   QDB.set('shops', data);
 }

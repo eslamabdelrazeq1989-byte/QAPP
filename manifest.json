@@ -2,7 +2,7 @@
   "name": "Quesina City — مدينة قويسنا",
   "short_name": "قويسنا",
   "description": "بوابة مدينة قويسنا — أخبار، خدمات، مطاعم، وأكثر",
-  "start_url": "/",
+  "start_url": "/QAPP/",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#E85D04",
